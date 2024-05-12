@@ -2,18 +2,46 @@ const express = require('express')
 const { generateSlug } = require("random-word-slugs")
 const { ContainerInstanceManagementClient } = require("@azure/arm-containerinstance");
 const { DefaultAzureCredential } = require("@azure/identity");
+const { Server } = require('socket.io')
+const Redis = require('ioredis')
+
 
 require('dotenv').config()
 
 const app = express()
 const PORT = 9000
-
 app.use(express.json())
 
-const resourceGroupName = process.env.RESOURCE_GROUP_NAME;
+
+const subscriber = new Redis(process.env.REDIS_URL)
+const io = new Server({ cors: '*' })
+
+io.on('connection', (socket) => {
+  socket.on('subscribe', (channel) => {
+    socket.join(channel)
+    socket.emit('message', `Subscribed to ${channel} channel`)
+
+
+  })
+})
 
 
 
+io.listen(9001, () => {
+  console.log("Socket Server Running on port 9001")
+})
+
+async function initRedisSubscriber() {
+  console.log("Subscribed to logs....")
+  // Subscribing to a specific pattern
+  // psubscribe is used to subscribe to a pattern
+  subscriber.psubscribe('logs:*')
+  subscriber.on('pmessage', (pattern, channel, message) => {
+    io.to(channel).emit('message', message)
+  })
+}
+
+initRedisSubscriber()
 
 app.get('/', (req, res) => {
   res.send("API Server Running..")
@@ -21,6 +49,7 @@ app.get('/', (req, res) => {
 
 
 
+const resourceGroupName = process.env.RESOURCE_GROUP_NAME;
 const defineContainerConfig = (gitURL, projectID, name) => {
   const newContainerConfig = {
 
@@ -52,6 +81,10 @@ const defineContainerConfig = (gitURL, projectID, name) => {
           {
             "name": "GIT_REPO_URL",
             "value": gitURL
+          },
+          {
+            "name": "REDIS_URL",
+            "value": process.env.REDIS_URL
           }
         ],
         resources: { requests: { memoryInGB: 1.5, cpu: 1 } }
@@ -60,7 +93,7 @@ const defineContainerConfig = (gitURL, projectID, name) => {
     imageRegistryCredentials: [
       {
         server: process.env.AZURE_CONTAINER_REGISTRY_SERVER,
-        username: '',
+        username: process.env.AZURE_CONTAINER_REGISTRY_USERNAME,
         isDelegatedIdentity: false,
         password: process.env.AZURE_CONTAINER_REGISTRY_PASSWORD
       }

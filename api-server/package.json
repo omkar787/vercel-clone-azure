@@ -13,6 +13,8 @@
     "@azure/identity": "^4.2.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "random-word-slugs": "^0.1.7"
+    "ioredis": "^5.4.1",
+    "random-word-slugs": "^0.1.7",
+    "socket.io": "^4.7.5"
   }
 }
